@@ -1,0 +1,10 @@
+Shimmerpack
+W,Stonescar Burn
+W,Stonescar Burn
+L,Combrei Midrange
+L,Feln Control
+W,Rakano Warcry
+L,Stonescar Jito
+W,Aggressive Combrei
+W,Stonescar Burn
+L,Feln Control

@@ -1,0 +1,10 @@
+Stonescar Burn
+W,Aggressive Combrei
+W,Icaria Blue
+W,Shimmerpack
+W,Haunting Scream
+L,Elysian Midrange
+L,Rakano Warcry
+W,Big Combrei
+W,FJS Armory
+L,Stonescar Jito
