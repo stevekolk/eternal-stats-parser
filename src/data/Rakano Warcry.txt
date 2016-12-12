@@ -1,0 +1,7 @@
+Rakano Warcry
+D,L,FJS Midrange
+P,W,Elysian Midrange
+D,W,FJS Midrange
+D,L,Stonescar Jito
+D,L,Icaria Blue
+P,W,Stonescar Midrange

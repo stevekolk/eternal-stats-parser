@@ -53,16 +53,76 @@ max_deck_length = 0
 faction_counts = dict()
 sorted_factions = None
 
+class Game:
+    """Class that holds a single game result."""
+    def __init__( self, player_deck, opponent_deck, win, play_draw_unknown ):
+        self.player_deck = player_deck
+        self.opponent_deck = opponent_deck
+        self.win = win
+        self.play_draw_unknown = play_draw_unknown
+
 class Record:
-    """Class that holds a deck's win/loss record.'"""
-    def __init__( self, deck ):
-        self.deck = deck
-        self.wins = 0
-        self.losses = 0
+    """Class that holds a deck's win/loss record against the player."""
+    def __init__( self, player_deck, opponent_deck ):
+        self.player_deck = player_deck
+        self.opponent_deck = opponent_deck
+        self.games = []
 
     @property
-    def percentage( self ):
+    def wins( self ):
+        win_count = 0
+        for game in self.games:
+            if game.win:
+                win_count += 1
+        return win_count
+
+    @property
+    def play_wins( self ):
+        win_count = 0
+        for game in self.games:
+            if game.win and game.play_draw_unknown == 'P':
+                win_count += 1
+        return win_count
+
+    @property
+    def draw_wins( self ):
+        win_count = 0
+        for game in self.games:
+            if game.win and game.play_draw_unknown == 'D':
+                win_count += 1
+        return win_count
+
+    @property
+    def losses( self ):
+        loss_count = 0
+        for game in self.games:
+            if not game.win:
+                loss_count += 1
+        return loss_count
+
+    @property
+    def play_losses( self ):
+        loss_count = 0
+        for game in self.games:
+            if not game.win and game.play_draw_unknown == 'P':
+                loss_count += 1
+        return loss_count
+
+    @property
+    def draw_losses( self ):
+        loss_count = 0
+        for game in self.games:
+            if not game.win and game.play_draw_unknown == 'D':
+                loss_count += 1
+        return loss_count
+
+    @property
+    def player_percentage( self ):
         return float( self.wins )*100 / ( self.wins + self.losses )
+
+    @property
+    def opponent_percentage( self ):
+        return float( self.losses )*100 / ( self.wins + self.losses )
 
     @property
     def count( self ):
@@ -88,23 +148,34 @@ def parse_stats_file( stat_file ):
             if original_line == '':
                 continue
             line = original_line.split( ',' )
-            # The line must have exactly two entries, the W/L and the deck name.
-            if len( line ) != 2:
+            # This line has two formats:
+            #   - 2 entries: Win or loss, comma, then the deck name.
+            #                    Example: W,Rakano Warcry
+            #   - 3 entries: Play or draw or unknown, comma, win or loss, comma, then the deck name.
+            #                    Example: P,W,Rakano Warcry
+            if len( line ) == 2:
+                play_draw = 'U'
+                result = line[0]
+                opponent_deck = line[1]
+            elif len( line ) == 3:
+                play_draw = line[0]
+                result = line[1]
+                opponent_deck = line[2]
+            else:
                 raise ValueError( 'Found invalid line in file "'+stat_file+'": '+original_line )
-            result = line[0]
-            opponent_deck = line[1]
+            if result != 'W' and result != 'L':
+                raise ValueError( 'Found invalid win/loss in file "'+stat_file+'": '+original_line )
+            if play_draw != 'P' and play_draw != 'D' and play_draw != 'U':
+                raise ValueError( 'Found invalid play/draw in file "'+stat_file+'": '+original_line )
             if not opponent_deck in meta:
-                meta[opponent_deck] = Record( opponent_deck )
+                meta[opponent_deck] = Record( deck, opponent_deck )
             if not deck in records:
                 records[deck] = dict()
             if not opponent_deck in records[deck]:
-                records[deck][opponent_deck] = Record( opponent_deck )
-            if result == 'W':
-                records[deck][opponent_deck].wins += 1
-                meta[opponent_deck].losses += 1
-            elif result == 'L':
-                records[deck][opponent_deck].losses += 1
-                meta[opponent_deck].wins += 1
+                records[deck][opponent_deck] = Record( deck, opponent_deck )
+            game = Game( deck, opponent_deck, result == 'W', play_draw )
+            records[deck][opponent_deck].games.append( game )
+            meta[opponent_deck].games.append( game )
             added = False
             for faction in factions:
                 if added:
@@ -164,7 +235,7 @@ def main( args ):
     global faction_counts
     global sorted_factions
 
-    print( "Unearthly's stat parser 1.0\n" )
+    print( "Unearthly's stat parser 1.1\n" )
 
     try:
         parse_all_stats()
@@ -219,6 +290,10 @@ def main( args ):
         records_array = []
         total_wins = 0
         total_games = 0
+        total_play_wins = 0
+        total_play_games = 0
+        total_draw_wins = 0
+        total_draw_games = 0
         for opponent_deck in records[deck]:
             if deck == opponent_deck and not include_mirror:
                 continue
@@ -227,19 +302,34 @@ def main( args ):
                 continue
             total_wins += records[deck][opponent_deck].wins
             total_games += deck_games
+            total_play_wins += records[deck][opponent_deck].play_wins
+            total_play_games += records[deck][opponent_deck].play_wins
+            total_play_games += records[deck][opponent_deck].play_losses
+            total_draw_wins += records[deck][opponent_deck].draw_wins
+            total_draw_games += records[deck][opponent_deck].draw_wins
+            total_draw_games += records[deck][opponent_deck].draw_losses
             records_array.append( records[deck][opponent_deck] )
         if total_games == 0:
             continue
         total_losses = total_games-total_wins
+        total_play_losses = total_play_games-total_play_wins
+        total_draw_losses = total_draw_games-total_draw_wins
         print()
-        print( "%s Matchups: %.1f%% (%d-%d)" % ( deck, total_wins*100/float(total_games), total_wins, total_losses ) )
-        records_array.sort( key=lambda x: x.deck )
+        print( deck )
+        print( "  Total winrate: %.1f%% (%d-%d)" % ( total_wins*100/float(total_games), total_wins, total_losses ) )
+        if total_play_games > 0:
+            print( "  Play winrate:  %.1f%% (%d-%d)" % ( total_play_wins*100/float(total_play_games), total_play_wins, total_play_losses ) )
+        if total_draw_games > 0:
+            print( "  Draw winrate:  %.1f%% (%d-%d)" % ( total_draw_wins*100/float(total_draw_games), total_draw_wins, total_draw_losses ) )
+
+        print( "Matchups:" )
+        records_array.sort( key=lambda x: x.opponent_deck )
         records_array.sort( key=lambda x: x.wins, reverse=True )
-        records_array.sort( key=lambda x: x.percentage, reverse=True )
+        records_array.sort( key=lambda x: x.player_percentage, reverse=True )
         for record in records_array:
-            percentage = '%.1f%%' % ( record.percentage )
-            print( "%s %s - (%d-%d)" % (
-                record.deck.ljust(max_deck_length),
+            percentage = '%.1f%%' % ( record.player_percentage )
+            print( "  %s %s - (%d-%d)" % (
+                record.opponent_deck.ljust(max_deck_length),
                 percentage.rjust(6),
                 record.wins,
                 record.losses ) )
